@@ -3,19 +3,19 @@ This implementation is intentionally kept naive for simplicity."""
 
 BOUND = 15
 DELAY = 0.2 #seconds
+board = set()
 
 def iterate(board):
     """ Return the next generation of the passed board. """
     new = set() # If we mutate the set in place we'll screw things up, so we'll add to a new empty set
     for x in range(BOUND):
         for y in range(BOUND):
-            is_alive = (x, y) in board
-            #import pdb; pdb.set_trace()
-            if next_state(is_alive, neighbor_count((x,y), board)):
+            location = x, y
+            if next_state(is_alive(location), neighbor_count((x,y))):
                 new.add((x, y))
     return new
 
-def draw_board(screen, board):
+def draw_board(screen):
     for x in range(BOUND):
         for y in range(BOUND):
             screen.addstr(y, x, "@" if (x, y) in board else "`")
@@ -53,21 +53,54 @@ def next_state(alive, neighbors):
         else:
             return False #STAYDEAD
 
-def neighbor_count(loc, board):
+
+def foo():
+    """
+    >>> foo = "four"
+    >>> foo += "five"
+    >>> foo
+    'fourfive'
+    """
+
+def group_by_length(words):
+    """Returns a dictionary grouping words into sets by length.
+
+    >>> grouped = group_by_length([ 'python', 'module', 'of', 'the', 'week' ])
+    >>> grouped == { 2:set(['of']),
+    ...              3:set(['the']),
+    ...              4:set(['week']),
+    ...              6:set(['python', 'module']),
+    ...              }
+    True
+
+    """
+    d = {}
+    for word in words:
+        s = d.setdefault(len(word), set())
+        s.add(word)
+    return d
+
+def neighbor_count(loc, board=board):
     """ Returns the number of neighbor cells that are "alive" (in the set).
 
-    >>> neighbor_count((1,1), board=set([(0,0), (0,1)]))
+    >>> board = set([(0,0), (0,1)])
+    >>> neighbor_count((1,1), board)
     2
 
     This one tests a board that's fully "alive".  The funny expression on board is a list comprehension we'll learn about later.
-    >>> neighbor_count((1,1), board=set([(x, y) for x in (0,1,2) for y in (0,1,2)]))
+    >>> board=set([(x, y) for x in (0,1,2) for y in (0,1,2)])
+    >>> neighbor_count((1,1), board)
     8
     """
     count = 0
-    for n in get_neighbors(loc):
-        if n in board:
+    for neighbor in get_neighbors(loc):
+        if is_alive(neighbor, board): #binding to board to support tests
             count += 1
     return count
+
+def is_alive(location, board=board):
+    # The set confourtains all of the "alive" cells.  Any cells not in the set are implicitly "dead".
+    return location in board
 
 def get_neighbors(loc, bound=BOUND):
     """Returns a tuple of locations that are immediately adjacent to the given location, wrapping around bounds.
@@ -98,6 +131,7 @@ def _test():
 
 def _main(stdscr):
     import time
+    global board
 
     #Here are three patterns defined as sets
     glider = set([(9, 6), (9, 7), (9, 8), (10, 6), (11, 7)])
@@ -105,15 +139,15 @@ def _main(stdscr):
     beehive = set([(1, 10), (2, 9), (2, 11), (3, 9), (3, 11), (4, 10)])
     spinnersplosion = set([(6, 7), (7, 7), (8, 7), (7, 9)])
 
-    board = glider
-    #board = spinnersplosion
+    #board = glider
+    board = spinnersplosion
     #board = set.union(glider, beehive, spinner)
 
     # Start curses and bail on keypress
     stdscr.clear()
     stdscr.nodelay(True)
     while True:
-        draw_board(stdscr, board)
+        draw_board(stdscr)
         time.sleep(DELAY) #seconds
 
         board = iterate(board)
