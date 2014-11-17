@@ -7,25 +7,29 @@ __author__ = "Hovis <hovis_biddle@symantec.com>"
 # I'm bounding the world to keep logic and display trivial, but using
 #  a set for state allows practically unlimited board size!
 BOUND = 15
-DELAY = 1 #seconds
+DELAY = .3 #seconds
 
-# GLOBALS
-
-# These are some pre-defined patterns
+# GLOBALS (some pre-defined patterns)
 spinner = set([(1, 0), (1, 1), (1, 2)])
 glider = set([(9, 6), (9, 7), (9, 8), (10, 6), (11, 7)])
 beehive = set([(1, 10), (2, 9), (2, 11), (3, 9), (3, 11), (4, 10)])
 spinnersplosion = set([(6, 7), (7, 7), (8, 7), (7, 9)])
 
-globalboard = spinner.union(glider)
+def _main(board=spinner.union(glider)):
+    import time
+    mainboard = board
 
+    # Draw stuff, break on Ctrl-C
+    while True:
+        draw_board(mainboard)
+        time.sleep(DELAY) #seconds
+        mainboard = iterate(mainboard)
 
 def iterate(board):
     """ Return the next generation of the passed board.
-    
-    >>> spinner = set([(1, 0), (1, 1), (1, 2)])
-    >>> iterate(spinner)
-    set((0, 1), (1, 1), (2, 1))
+
+    >>> iterate( set([(1,0), (1,1), (1,2)]) )
+    {(0, 1), (1, 1), (2, 1)}
     """
     # Sets are mutable, if we edit it directly we'll screw things up because
     # LIFE is supposed to iterate a whole universe at a time
@@ -36,7 +40,7 @@ def iterate(board):
     # If we made a list from the generator, it would look like: [(0,0), (0,1), (0,2), ..., (14, 14)]
     for location in ((x, y) for x in range(BOUND) for y in range(BOUND)):
         # location is a 2-tuple that corresponds to an x, y coordinate
-        if cell_next_state( is_alive(location), neighbor_count(location) ):
+        if cell_next_state( is_alive(location, board), neighbor_count(location, board) ):
             next_board.add(location)
     return next_board
 
@@ -46,7 +50,7 @@ def cell_next_state(alive, neighbors):
     Operates according to Conway's original rules (B3/S23).
     These rules mean that an dead cell should become alive if it has 3 live neighbors, 
     and an alive cell should stay alive if it has 2 or 3 live neighbors,  otherwise the live cell should die.
-    
+
     Examples:
 
     >>> cell_next_state(alive=True, neighbors=2)
@@ -73,10 +77,7 @@ def cell_next_state(alive, neighbors):
     else:
         return neighbors == 3
 
-# board=globalboard means to use the global variable board if we don't explicitly pass one
-# We're using this little hack so that I can write doctests for a function that uses global vars
-# In real life, we really don't want to use global variables and we shouldn't need to do this here.
-def neighbor_count(location, board=globalboard):
+def neighbor_count(location, board):
     """ Returns the number of neighbor cells that are "alive" (in the set).
 
     >>> testboard = set([(0,0), (2,1)])
@@ -94,16 +95,24 @@ def neighbor_count(location, board=globalboard):
             count += 1
     return count
 
-def is_alive(location, board=globalboard):
+def is_alive(location, board):
     """ Return True if the cell in location is alive, False if dead
 
-    >>> testboard = set([(0,0)])
+    >>> testboard = set([(0,0), (1,1), (2,2)])
 
     >>> location = 0, 0
     >>> is_alive(location, testboard)
     True
 
     >>> location = 0, 1
+    >>> is_alive(location, testboard)
+    False
+
+    >>> location = (1, 1)
+    >>> is_alive(location, testboard)
+    True
+
+    >>> location = (2,0)
     >>> is_alive(location, testboard)
     False
     """
@@ -114,14 +123,35 @@ def is_alive(location, board=globalboard):
 def get_neighbors(location, bound=BOUND):
     """Returns a tuple of locations that are immediately adjacent to the given location, wrapping around bounds.
 
+    + : loc
+    O : expected neighbors
+      012
+
+    0 OOO
+    1 O+O
+    2 OOO
     >>> get_neighbors((1,1))
     [(0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2)]
 
+      012345678901
+
+    0 +O        OO
+    1 OO
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    0
+    1 OO         O
     >>> get_neighbors(location=(0,0), bound=12)
     [(11, 11), (11, 0), (11, 1), (0, 11), (0, 1), (1, 11), (1, 0), (1, 1)]
     """
     # I'm going to use a mutable list to keep track of my neighbors, and then return it
-    # This can absolutely be optimized with a generator, we should do that later
+    # This can be optimized with a generator, see neighbors_generator
     x, y = location
     neighbors = []
     for offset_x in (-1, 0, 1):
@@ -129,7 +159,7 @@ def get_neighbors(location, bound=BOUND):
             nx = (x + offset_x) % bound
             ny = (y + offset_y) % bound
             if (nx, ny) == location:
-                continue # The location we were passed is not a neighbor
+                continue # The location passed to the function is not a neighbor
             neighbors.append((nx, ny))
     return neighbors
 
@@ -138,9 +168,32 @@ def neighbors_generator(location, bound=BOUND):
     Like get_neighbors(), but return a generator instead
 
     For testing, we'll pass the generator to tuple() to see what it yields.
+    X : loc
+    O : expected neighbors
+      012
+
+    0 OOO
+    1 O+O
+    2 OOO
+
     >>> loc = 1, 1
     >>> tuple(neighbors_generator(loc))
     ((0, 0), (0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1), (2, 2))
+
+      012345678901
+
+    0 +O        OO
+    1 OO
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    0
+    1 OO         O
 
     >>> loc = 0, 0
     >>> tuple(neighbors_generator(loc, bound=12))
@@ -158,22 +211,12 @@ def _test():
     import doctest
     print(doctest.testmod())
 
-def _main():
-    import time
-
-    global globalboard
-    # Draw stuff, break on Ctrl-C
-    while True:
-        draw_board(globalboard)
-        time.sleep(DELAY) #seconds
-        globalboard = iterate(globalboard)
-
-def draw_board(screen, board=globalboard):
+def draw_board(board):
     for x in range(BOUND):
         for y in range(BOUND):
-            print( "@" if is_alive((x,y)) else "`", end='')
+            print( "@" if is_alive((x,y), board) else "`", end='')
         print() #need that newline
-    print()
+    print("\n"*2)
 
 if __name__ == "__main__":
     import sys
